@@ -1,4 +1,6 @@
-#[derive(Debug)]
+use std::io::{BufRead, Write};
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Step {
     L,
     R,
@@ -18,7 +20,7 @@ impl TryFrom<&str> for Step {
 type State<'a> = &'a str;
 type Symbol<'a> = &'a str;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Turd<'a> {
     current: State<'a>,
     read: Symbol<'a>,
@@ -64,6 +66,14 @@ impl<'a> Turd<'a> {
             tokens[step].try_into()?,
             tokens[next],
         ))
+    }
+    fn states_of_turds(turds: &[Self]) -> Box<[State]> {
+        let mut states = std::collections::BTreeSet::new();
+        for turd in turds {
+            states.insert(turd.current);
+            states.insert(turd.next);
+        }
+        states.iter().copied().collect()
     }
 }
 
@@ -116,11 +126,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Box<[_]>>();
     if args.len() < 3 {
         eprintln!("Error: input file is not provided");
-        return Err("Usage: turd <input.turd> <input.tape> <initial-state>".into());
+        return Err("Usage: turd <input.turd> <input.tape>".into());
     }
     let turd_filepath = &args[1];
     let tape_filepath = &args[2];
-    let initial_state = &args[3];
 
     let content = std::fs::read_to_string(turd_filepath)?;
     let turds = content
@@ -130,6 +139,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|x| !x.1.is_empty())
         .map(|x| Turd::parse_turd(turd_filepath, x).unwrap())
         .collect::<Box<[_]>>();
+
+    let states = Turd::states_of_turds(&turds);
+
+    println!("Possible states:");
+    states.iter().for_each(|state| println!("{state}"));
+    print!("Initial_state: ");
+    std::io::stdout().flush().unwrap();
+    let initial_state = std::io::stdin().lock().lines().next().unwrap().unwrap();
+    println!();
+
     let binding = std::fs::read_to_string(tape_filepath)?;
     let mut machine = Machine::new(
         binding
@@ -137,14 +156,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(str::trim)
             .collect::<Box<[_]>>(),
         0,
-        initial_state,
+        &initial_state,
     );
     loop {
         machine.dump();
-        std::thread::sleep(std::time::Duration::from_secs(1));
         if !machine.next(&turds) {
             break;
         }
     }
+
     Ok(())
 }
