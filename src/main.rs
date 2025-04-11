@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Box<[_]>>();
     if args.len() < 3 {
         eprintln!("Error: input file is not provided");
-        return Err("Usage: turd <input.turd> <input.tape>".into());
+        return Err("Usage: .\turing-machine <input.turd> <input.tape>".into());
     }
     let turd_filepath = &args[1];
     let tape_filepath = &args[2];
@@ -145,8 +145,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Possible states:");
     states.iter().for_each(|state| println!("{state}"));
     print!("Initial_state: ");
-    std::io::stdout().flush().unwrap();
-    let initial_state = std::io::stdin().lock().lines().next().unwrap().unwrap();
+    std::io::stdout().flush()?;
+    let initial_state = std::io::stdin().lock().lines().next().unwrap()?;
     println!();
 
     let binding = std::fs::read_to_string(tape_filepath)?;
@@ -160,6 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     loop {
         machine.dump();
+        std::thread::sleep(std::time::Duration::from_millis(100));
         if !machine.next(&turds) {
             break;
         }
