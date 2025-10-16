@@ -3,6 +3,8 @@ use std::{
     error::Error,
     fmt::Display,
     io::{self, BufRead, Write},
+    thread,
+    time::Duration,
 };
 
 #[derive(Debug)]
@@ -166,7 +168,7 @@ pub fn main() -> Result<(), TuringMachineError> {
     };
     loop {
         print!("{machine}");
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(100));
         if !machine.next(&turds) {
             break;
         }
