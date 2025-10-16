@@ -2,19 +2,19 @@ use std::{
     collections::BTreeSet,
     error::Error,
     fmt::Display,
-    io::{BufRead, Write},
+    io::{self, BufRead, Write},
 };
 
 #[derive(Debug)]
-enum TuringMachineError {
+pub enum TuringMachineError {
     Parse(String),
     Transformation(String),
     Args(String),
-    Io(std::io::Error),
+    Io(io::Error),
 }
 
-impl From<std::io::Error> for TuringMachineError {
-    fn from(v: std::io::Error) -> Self {
+impl From<io::Error> for TuringMachineError {
+    fn from(v: io::Error) -> Self {
         Self::Io(v)
     }
 }
@@ -24,25 +24,23 @@ impl Error for TuringMachineError {}
 impl Display for TuringMachineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Parse(s) | Self::Transformation(s) | Self::Args(s) => {
-                write!(f, "{s}")
-            }
+            Self::Parse(s) | Self::Transformation(s) | Self::Args(s) => s.fmt(f),
             Self::Io(error) => error.fmt(f),
         }
     }
 }
 
 enum Step {
-    L,
-    R,
+    Left,
+    Right,
 }
 
 impl TryFrom<&str> for Step {
     type Error = TuringMachineError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "L" => Ok(Self::L),
-            "R" => Ok(Self::R),
+            "L" => Ok(Self::Left),
+            "R" => Ok(Self::Right),
             _ => Err(TuringMachineError::Transformation(format!(
                 "{value} is not a valid step. Expected 'L' or 'R'"
             ))),
@@ -63,13 +61,8 @@ struct Turd<'a> {
 
 impl<'a> Turd<'a> {
     fn parse_turd(filepath: &str, s: (usize, &'a str)) -> Result<Self, TuringMachineError> {
-        const CURRENT: usize = 0;
-        const READ: usize = 1;
-        const WRITE: usize = 2;
-        const STEP: usize = 3;
-        const NEXT: usize = 4;
-        let tokens = s.1.split_whitespace().map(str::trim).collect::<Vec<_>>();
-        if tokens.len() != 5 {
+        let mut tokens = s.1.split_whitespace();
+        if tokens.clone().count() != 5 {
             return Err(TuringMachineError::Parse(format!(
                 "{filepath}:{}: A single turd is expected to have 5 tokens",
                 s.0 + 1
@@ -77,11 +70,11 @@ impl<'a> Turd<'a> {
         }
 
         Ok(Self {
-            current: tokens[CURRENT],
-            read: tokens[READ],
-            write: tokens[WRITE],
-            step: tokens[STEP].try_into()?,
-            next: tokens[NEXT],
+            current: tokens.next().unwrap(),
+            read: tokens.next().unwrap(),
+            write: tokens.next().unwrap(),
+            step: tokens.next().unwrap().try_into()?,
+            next: tokens.next().unwrap(),
         })
     }
 
@@ -123,11 +116,11 @@ impl<'a> Machine<'a> {
         for turd in program {
             if turd.current == self.state && turd.read == self.tape[self.head] {
                 self.tape[self.head] = turd.write;
-                match turd.step {
-                    Step::L if self.head == 0 => self.head = self.tape.len() - 1,
-                    Step::L => self.head -= 1,
-                    Step::R => self.head = (self.head + 1) % self.tape.len(),
-                }
+                self.head = match turd.step {
+                    Step::Left if self.head == 0 => self.tape.len() - 1,
+                    Step::Left => self.head - 1,
+                    Step::Right => (self.head + 1) % self.tape.len(),
+                };
                 self.state = turd.next;
                 return true;
             }
@@ -136,7 +129,7 @@ impl<'a> Machine<'a> {
     }
 }
 
-fn main() -> Result<(), TuringMachineError> {
+pub fn main() -> Result<(), TuringMachineError> {
     let mut args = std::env::args();
     let program = args.next().unwrap();
     if args.len() < 2 {
@@ -153,13 +146,7 @@ fn main() -> Result<(), TuringMachineError> {
         .lines()
         .map(str::trim)
         .enumerate()
-        .filter_map(|x| {
-            if x.1.is_empty() {
-                None
-            } else {
-                Some(Turd::parse_turd(turd_filepath, x))
-            }
-        })
+        .filter_map(|x| (!x.1.is_empty()).then(|| Turd::parse_turd(&turd_filepath, x)))
         .collect::<Result<Vec<_>, _>>()?;
 
     let states = Turd::states_of_turds(&turds);
@@ -167,13 +154,13 @@ fn main() -> Result<(), TuringMachineError> {
     println!("Possible states:");
     states.for_each(|state| println!("{state}"));
     print!("Initial_state: ");
-    std::io::stdout().flush()?;
-    let initial_state = std::io::stdin().lock().lines().next().unwrap()?;
+    io::stdout().flush()?;
+    let initial_state = io::stdin().lock().lines().next().unwrap()?;
     println!();
 
     let binding = std::fs::read_to_string(tape_filepath)?;
     let mut machine = Machine {
-        tape: binding.split_whitespace().map(str::trim).collect(),
+        tape: binding.split_whitespace().collect(),
         head: 0,
         state: &initial_state,
     };
